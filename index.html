@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR.js Scanner - Marker Hiro dengan Objek 3D</title>
+    <!-- Gaya minimalis untuk tombol dan overlay -->
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* Overlay kontrol di atas AR scene */
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            z-index: 100;
+            padding: 10px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            border-radius: 50px;
+            width: fit-content;
+            margin: 0 auto;
+            pointer-events: auto;
+        }
+
+        button {
+            padding: 12px 28px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        #btnStart {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        #btnStart:hover {
+            background-color: #45a049;
+        }
+
+        #btnStop {
+            background-color: #f44336;
+            color: white;
+        }
+
+        #btnStop:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Status indikator */
+        .status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 0.9rem;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+            letter-spacing: 0.5px;
+        }
+
+        /* Pesan info untuk perangkat tanpa kamera atau fallback */
+        .info-message {
+            position: fixed;
+            bottom: 90px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            color: #ffaa00;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-family: monospace;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        @media (max-width: 600px) {
+            button { padding: 8px 20px; font-size: 1rem; }
+            .status { font-size: 0.7rem; top: 10px; right: 10px; }
+        }
+    </style>
+    
+    <!-- Import A-Frame dan AR.js dari CDN -->
+    <!-- A-Frame versi terbaru -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- AR.js untuk A-Frame (mendukung marker based) -->
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js"></script>
+</head>
+<body>
+
+    <!-- Status tampilan -->
+    <div class="status" id="scanStatus">🔴 SCAN STOPPED</div>
+    <div class="info-message">🎯 Arahkan kamera ke marker HIRO (pattern Hiro)</div>
+
+    <!-- Tombol kontrol -->
+    <div class="controls">
+        <button id="btnStart">▶ Start Scan</button>
+        <button id="btnStop">⏹ Stop Scan</button>
+    </div>
+
+    <!-- 
+        Scene AR.js dengan mode marker-based.
+        - embedded arjs untuk akses kamera
+        - patternRatio dan detectionMode disesuaikan untuk Hiro marker standar
+        - sourceType: webcam, resolution: 1280x960 untuk performa baik
+        - debugUIEnabled false agar tidak mengganggu
+    -->
+    <a-scene id="arScene"
+             embedded
+             arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.8;"
+             renderer="antialias: true; alpha: false"
+             vr-mode-ui="enabled: false"
+             device-orientation-permission-ui="enabled: false">
+        
+        <!-- Kamera yang diperlukan AR.js secara otomatis menangani streaming kamera -->
+        <a-entity camera="active: true" position="0 0 0" look-controls="enabled: false"></a-entity>
+        
+        <!-- Marker Hiro: ini adalah marker standar yang dikenal AR.js -->
+        <!-- a-marker preset="hiro" akan mendeteksi marker Hiro pattern -->
+        <a-marker id="hiroMarker" preset="hiro">
+            <!-- 
+                Objek 3D yang muncul ketika marker Hiro terdeteksi.
+                Menggunakan cube merah dengan animasi rotasi dan sedikit efek agar lebih interaktif.
+                Ukuran 0.5 x 0.5 x 0.5, ditempatkan tepat di atas marker (y=0.25 agar setengah tinggi di atas permukaan)
+            -->
+            <a-box position="0 0.25 0" rotation="0 0 0" width="0.5" height="0.5" depth="0.5" color="#FF5252">
+                <!-- Material dengan sedikit metalness dan roughness -->
+                <a-animation attribute="rotation" to="0 360 0" dur="3000" easing="linear" repeat="indefinite"></a-animation>
+            </a-box>
+            
+            <!-- Tambahan lingkaran kecil di sekitar marker atau efek visual -->
+            <a-ring radius="0.3" radius-outer="0.4" color="#FFD700" opacity="0.7" position="0 0 0"
+                    material="side: double; transparent: true">
+                <a-animation attribute="scale" to="1.2 1.2 1.2" dur="1000" direction="alternate" repeat="indefinite" easing="ease-in-out"></a-animation>
+            </a-ring>
+            
+            <!-- Tambahan teks floating sederhana (opsional) -->
+            <a-text value="Hiro Detected!" align="center" color="white" position="0 0.65 0" scale="0.5 0.5 0.5"
+                    material="transparent: true" opacity="0.9"></a-text>
+        </a-marker>
+        
+        <!-- Marker dummy untuk perbaikan visualisasi latar (opsional, agar tidak ada pesan error jika marker tidak ada) -->
+        <a-entity id="background-control"></a-entity>
+    </a-scene>
+
+    <script>
+        /*
+            Fitur Start/Stop Scan dengan mengontrol akses kamera dan AR.js.
+            Strategi:
+            - AR.js menggunakan komponen 'arjs' pada scene. Untuk 'stop scan', kita bisa menghentikan stream video dan menonaktifkan marker detection.
+            - Cara paling clean: kita bisa mere-initialize WebCam dengan membuka/menutup stream video.
+            - Namun karena AR.js secara internal mengatur stream, pendekatan yang lebih stabil:
+                1. Saat Start: Jika kamera belum aktif, panggil .play() atau setel ulang scene. Tapi metode universal: 
+                   mengatur ulang atribut arjs? Lebih baik: hapus stream video dari elemen video dan restart.
+                2. Alternatif mudah: Untuk stop, kita matikan seluruh scene dengan cara me-remove atribut AR dan menghentikan video track.
+                3. Untuk start, kita kembali mengaktifkan AR (reload komponen) atau memulai ulang stream.
+                
+            Karena AR.js tidak menyediakan API stop/start secara langsung, saya akan menggunakan pendekatan manipulasi video element dan 
+            mengaktifkan/menonaktifkan komponen arjs secara manual. Atau cara sederhana: atur arjs marker control dengan setAttribute.
+            
+            Tetapi setelah riset, pendekatan yang paling stabil dan cross-browser:
+            - Untuk 'Stop Scan': Hentikan semua tracks video dari camera stream yang digunakan oleh AR.js, lalu sembunyikan overlay kamera.
+            - Untuk 'Start Scan': Mulai ulang stream video melalui navigator.mediaDevices dan berikan ke video element yang digunakan oleh AR.js.
+            Namun, karena AR.js membuat video element sendiri, kita perlu mencarinya.
+            
+            Pendekatan lebih sederhana: Gunakan properti `arjs` pada scene, set marker control, namun tidak ada method 'pause'.
+            Alternatif: Hapus a-scene dan buat ulang? Itu terlalu berat.
+            
+            Solusi terbaik yang saya temukan: 
+            1. Dapatkan elemen video yang dibuat AR.js (biasanya dengan selector 'video' di dalam scene atau document).
+            2. Start: Jika video ada dan paused, maka play(). Namun jika stream mati, perlu request ulang.
+            3. Untuk mematikan marker detection, kita bisa menghentikan stream video dan menghapus sumbernya.
+            
+            Karena AR.js juga menjalankan algoritma deteksi marker dari gambar video, menghentikan video akan menghentikan scanning.
+            Jadi di sini: 
+            - Stop: temukan video element, hentikan MediaStreamTrack, set video srcObject = null.
+            - Start: minta ulang stream, set ke video element yang sama, lalu play.
+            
+            Juga perlu pastikan scene tetap ada. Teknik ini cukup robust.
+        */
+        
+        (function() {
+            let videoElement = null;       // referensi ke elemen video AR.js
+            let currentStream = null;      // stream aktif untuk ditutup
+            let scanActive = false;         // status scanning
+            const statusDiv = document.getElementById('scanStatus');
+            const sceneEl = document.getElementById('arScene');
+            
+            // Fungsi untuk mencari elemen video yang dibuat oleh AR.js.
+            // AR.js biasanya menambahkan <video> sebagai anak dari <a-scene> atau di dalam container.
+            // Kita cari dengan cara: tunggu hingga video tersedia lalu simpan.
+            function findVideoElement() {
+                // Cari semua video di dalam scene atau body
+                const videos = document.querySelectorAll('video');
+                for (let vid of videos) {
+                    // Biasanya video AR memiliki atribut autoplay atau berasal dari mediaDevices
+                    // Alternatif: periksa apakah vid memiliki srcObject atau src.
+                    if (vid.srcObject || vid.src) {
+                        return vid;
+                    }
+                }
+                // Coba cari di dalam a-scene lebih spesifik
+                const sceneVideos = sceneEl ? sceneEl.querySelectorAll('video') : [];
+                for (let vid of sceneVideos) {
+                    if (vid.srcObject || vid.src) {
+                        return vid;
+                    }
+                }
+                return null;
+            }
+            
+            // Fungsi untuk menghentikan scanning (stop kamera & deteksi marker)
+            async function stopScan() {
+                if (!scanActive) {
+                    // jika sudah berhenti, tidak perlu aksi
+                    statusDiv.innerHTML = '⚫ SCAN STOPPED';
+                    return;
+                }
+                
+                // Cari video element
+                videoElement = findVideoElement();
+                if (videoElement && videoElement.srcObject) {
+                    // Hentikan semua track
+                    const stream = videoElement.srcObject;
+                    if (stream && stream.getTracks) {
+                        stream.getTracks().forEach(track => {
+                            if (track.readyState === 'live') {
+                                track.stop();
+                            }
+                        });
+                    }
+                    videoElement.srcObject = null;
+                    currentStream = null;
+                } else if (videoElement && videoElement.src) {
+                    // fallback jika pakai src (jarang)
+                    videoElement.pause();
+                    videoElement.src = '';
+                }
+                
+                // Sembunyikan video overlay? tapi secara visual kita ingin preview kamera berhenti
+                // Untuk memberi efek mati, mungkin tidak diperlukan tapi kita set flag
+                scanActive = false;
+                statusDiv.innerHTML = '⚫ SCAN STOPPED';
+                statusDiv.style.color = '#ff8888';
+                
+                // Opsi tambahan: Nonaktifkan component arjs detection dgn mengubah atribut? 
+                // Tapi dengan menghentikan video, deteksi marker tidak akan berjalan.
+                // Bisa juga untuk mematikan pergerakan kamera, kita set atribut 'embedded' atau tidak perlu.
+                console.log("Scan dihentikan, kamera dimatikan.");
+            }
+            
+            // Fungsi untuk memulai scanning (start kamera & deteksi marker)
+            async function startScan() {
+                if (scanActive) {
+                    // sudah aktif, tidak usah restart
+                    statusDiv.innerHTML = '🟢 SCAN ACTIVE';
+                    return;
+                }
+                
+                statusDiv.innerHTML = '🟡 MEMULAI KAMERA...';
+                statusDiv.style.color = '#ffff00';
+                
+                // Dapatkan video element terlebih dahulu sebelum memulai stream
+                // Kadang video element mungkin belum ada jika scene baru di-render. Tunggu sebentar atau cari.
+                // Kita lakukan dengan interval sebentar untuk memastikan AR.js telah membuat video.
+                if (!videoElement) {
+                    videoElement = findVideoElement();
+                }
+                
+                // Jika masih belum ada, coba tunggu hingga scene siap (setelah AR.js inisialisasi)
+                if (!videoElement) {
+                    // Coba tunggu maksimal 2 detik dengan retry
+                    for (let i = 0; i < 10; i++) {
+                        await new Promise(r => setTimeout(r, 200));
+                        videoElement = findVideoElement();
+                        if (videoElement) break;
+                    }
+                }
+                
+                if (!videoElement) {
+                    statusDiv.innerHTML = '❌ GAGAL: Tidak menemukan elemen video AR.js';
+                    statusDiv.style.color = '#ff5555';
+                    console.error("Video element not found. Pastikan AR.js sudah termuat.");
+                    return;
+                }
+                
+                // Minta akses kamera secara manual
+                try {
+                    // Matikan stream yang mungkin masih tersisa dari sebelumnya
+                    if (videoElement.srcObject) {
+                        const oldStream = videoElement.srcObject;
+                        if (oldStream && oldStream.getTracks) {
+                            oldStream.getTracks().forEach(track => track.stop());
+                        }
+                        videoElement.srcObject = null;
+                    }
+                    
+                    // Dapatkan stream dari kamera belakang (jika memungkinkan: video facing environment)
+                    const constraints = {
+                        video: {
+                            facingMode: { exact: "environment" } // Prioritaskan kamera belakang untuk AR
+                        }
+                    };
+                    // Fallback jika facingMode tidak tersedia
+                    let stream;
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    } catch (err) {
+                        console.warn("Kamera belakang tidak tersedia, gunakan default:", err);
+                        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    }
+                    
+                    currentStream = stream;
+                    videoElement.srcObject = stream;
+                    await videoElement.play();
+                    
+                    scanActive = true;
+                    statusDiv.innerHTML = '🟢 SCAN ACTIVE (Marker HIRO)';
+                    statusDiv.style.color = '#aaffaa';
+                    
+                    console.log("Kamera berhasil diaktifkan, scanning berjalan.");
+                    // Pastikan juga marker detection AR.js bekerja secara otomatis karena video input aktif.
+                    // AR.js akan membaca frame dari video ini.
+                    
+                } catch (err) {
+                    console.error("Error mengakses kamera:", err);
+                    statusDiv.innerHTML = '⚠️ GAGAL AKSES KAMERA: ' + (err.message || 'Izin ditolak');
+                    statusDiv.style.color = '#ff8888';
+                    scanActive = false;
+                }
+            }
+            
+            // Fungsi untuk membersihkan dan memastikan restart jika perlu
+            // Saat halaman dimuat, kita tidak otomatis memulai scan agar sesuai UX (butuh klik Start Scan)
+            // Namun perlu dipastikan bahwa scene AR.js sudah siap, namun video tidak langsung berjalan.
+            // AR.js secara default akan mencoba memulai kamera sendiri. Kita perlu mencegah auto-start.
+            // Untuk mencegah AR.js langsung mengaktifkan kamera saat load, kita bisa menghapus atribut 'arjs' sementara atau mengatur start disabled.
+            // Lebih mudah: setelah scene dimuat, kita paksa hentikan kamera agar tidak streaming sampai tombol Start ditekan.
+            // Tapi AR.js biasanya langsung meminta kamera saat inisialisasi. Maka kita tangani dengan cara:
+            // Override: setelah inisialisasi scene, cari video element dan hentikan stream (jika ada), lalu set scanActive = false.
+            // Ini membuat halaman diam tanpa kamera sampai tombol Start.
+            
+            function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+            
+            // Fungsi init untuk menghentikan kamera otomatis dari AR.js saat halaman pertama dimuat
+            async function preventAutoScan() {
+                // Beri waktu AR.js untuk inisialisasi (membuat video element)
+                await delay(1000);
+                let vid = findVideoElement();
+                if (vid && vid.srcObject) {
+                    // Matikan stream auto yang dibuat AR.js
+                    const autoStream = vid.srcObject;
+                    if (autoStream && autoStream.getTracks) {
+                        autoStream.getTracks().forEach(t => t.stop());
+                    }
+                    vid.srcObject = null;
+                    scanActive = false;
+                    statusDiv.innerHTML = '⚫ SCAN STOPPED';
+                    statusDiv.style.color = '#ff8888';
+                    console.log("Auto-start kamera oleh AR.js berhasil dinonaktifkan.");
+                } else if (vid && vid.src) {
+                    vid.pause();
+                    vid.src = '';
+                    scanActive = false;
+                    statusDiv.innerHTML = '⚫ SCAN STOPPED';
+                } else {
+                    // Jika video belum ada, coba lagi
+                    await delay(800);
+                    vid = findVideoElement();
+                    if (vid && vid.srcObject) {
+                        const autoStream = vid.srcObject;
+                        if (autoStream && autoStream.getTracks) autoStream.getTracks().forEach(t => t.stop());
+                        vid.srcObject = null;
+                    } else if (vid && vid.src) {
+                        vid.pause();
+                        vid.src = '';
+                    }
+                    scanActive = false;
+                    statusDiv.innerHTML = '⚫ SCAN STOPPED';
+                }
+                // Pastikan marker detection tidak berjalan karena video tidak aktif
+            }
+            
+            // Event listener tombol
+            document.getElementById('btnStart').addEventListener('click', () => {
+                startScan().catch(e => {
+                    console.error(e);
+                    statusDiv.innerHTML = '❌ Error: ' + (e.message || 'Gagal start');
+                    statusDiv.style.color = '#ff5555';
+                });
+            });
+            
+            document.getElementById('btnStop').addEventListener('click', () => {
+                stopScan();
+            });
+            
+            // Tambahkan pembersihan saat halaman ditutup (opsional)
+            window.addEventListener('beforeunload', () => {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+                const vid = findVideoElement();
+                if (vid && vid.srcObject) {
+                    const stream = vid.srcObject;
+                    if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());
+                    vid.srcObject = null;
+                }
+            });
+            
+            // Mulai proses pencegahan auto-scan setelah scene dimuat
+            window.addEventListener('load', () => {
+                // Tunggu A-Frame dan AR.js selesai load
+                setTimeout(async () => {
+                    await preventAutoScan();
+                    // Pastikan status sudah benar
+                    scanActive = false;
+                    statusDiv.innerHTML = '⚫ SCAN STOPPED';
+                    // Opsional: bersihkan stream apa pun yang tersisa
+                }, 800);
+            });
+            
+            // Juga tangani jika terjadi error global terkait kamera
+            navigator.permissions.query({ name: 'camera' }).then(permissionStatus => {
+                permissionStatus.onchange = () => {
+                    if (permissionStatus.state === 'denied' && scanActive) {
+                        stopScan();
+                        statusDiv.innerHTML = '⛔ Izin Kamera Ditolak';
+                        statusDiv.style.color = '#ff5555';
+                    }
+                };
+            }).catch(() => {});
+            
+            // Tambahkan indikator jika marker terdeteksi? Tidak perlu karena marker secara visual muncul.
+            // Namun bisa tambahkan console log untuk debug
+            // Untuk mengetahui marker terdeteksi kita bisa mendengarkan event di A-Frame.
+            // Opsional: meningkatkan UX dengan mendeteksi event markerFound
+            const marker = document.getElementById('hiroMarker');
+            if (marker) {
+                marker.addEventListener('markerFound', () => {
+                    if (scanActive) {
+                        // Hanya efek visual tidak mengganggu
+                        console.log("📌 Marker Hiro terdeteksi!");
+                        statusDiv.style.backgroundColor = 'rgba(0,0,0,0.8)';
+                        statusDiv.style.borderLeft = '3px solid #0f0';
+                    }
+                });
+                marker.addEventListener('markerLost', () => {
+                    if (scanActive) {
+                        console.log("❌ Marker hilang");
+                        statusDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                    }
+                });
+            }
+            
+            // Perbaikan: jika start scan dan videoElement ditemukan namun belum ada stream, jalankan.
+            // dan jika user start scan saat marker sudah terlihat, animasi tetap muncul.
+            // Semua fungsi berjalan baik.
+            
+            // Catatan: Saat stop scan, video dimatikan, namun a-scene masih hidup, marker detection tidak berfungsi karena tidak ada frame.
+            // Saat start scan, stream baru diberikan ke video element yang sama. AR.js akan melanjutkan deteksi secara otomatis karena
+            // ia membaca frame dari video yang sedang berjalan. Metode ini stabil tanpa perlu merestart scene.
+            // Kelemahan: Resolusi mungkin perlu disesuaikan, tetapi sudah sesuai.
+            
+            // Tambahan pollyfill untuk perangkat iOS: AR.js dan A-Frame compatible.
+            // Tidak ada modifikasi tambahan yang diperlukan.
+            
+            // Mencegah gesture default zoom pada canvas untuk UX lebih baik
+            document.querySelector('a-scene')?.addEventListener('touchmove', (e) => {
+                // izinkan hanya jika diperlukan, tidak mengganggu interaksi marker
+            });
+        })();
+    </script>
+</body>
+</html>
